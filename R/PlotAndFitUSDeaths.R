@@ -14,18 +14,41 @@ US_deaths = read.csv("~/Google Drive/COVID-19/csse_covid_19_data/csse_covid_19_t
                                   date_numeric = lubridate::yday(date))
 
 
-# let's only look after Feb 28th
-US_deaths = US_deaths %>% dplyr::filter(date > as.Date('2020-02-28'))
+# start date with 10 total deaths
+start_date = US_deaths$date[min(which(US_deaths$US_deaths > 10))]
+
+# let's only look after the date when 10 total deaths had occured
+US_deaths = US_deaths %>% dplyr::filter(date > start_date)
 
 # fit non-linear model
-mod <- nls(US_death_new ~ exp(a + b * date_numeric), data = US_deaths, start = list(a = 0, b = 0))
+mod.lo <- loess(US_death_new ~ date_numeric, data = US_deaths, control = loess.control(surface = "direct"))
+predict(mod.lo, newdata = data.frame(date_numeric = (max(US_deaths$date_numeric)+1):(max(US_deaths$date_numeric)+10), se = TRUE))
 
 
+# set span such that we fit on the nearest 14 points
+span = 14/nrow(US_deaths)
 
 # add fitted curve
-US_deaths = US_deaths %>%dplyr::mutate(US_death_estimated = predict(mod, list(date_numeric = date_numeric)))
+US_deaths = US_deaths %>% dplyr::mutate(US_death_estimated = exp(predict(mod, list(date_numeric = date_numeric))))
 
-ggplot(US_deaths %>% dplyr::filter(date > as.Date('2020-02-28'))) +
-  geom_line(aes(date, US_death_new)) +
-  geom_line(aes(date, US_death_estimated), col = 'red', linetype = 'dashed') +
+pdf(file = 'figs/US_deaths_and_exponential_fit.pdf',
+    height = 5,
+    width = 8)
+print(
+ggplot(US_deaths %>% dplyr::filter(date > start_date),
+       aes(date, US_death_new)) +
+  geom_line(size = 1.0) +
+  geom_point() +
+  geom_smooth(span = span,
+              col = 'red',
+              linetype = 'dashed') +
+  # geom_line(aes(date, US_death_estimated), 
+  #           col = 'red', 
+  #           linetype = 'dashed',
+  #           size = 1.25) +
+  labs(x = 'Date',
+       y = "New reported deaths in the US from Covid-19") +
   theme_bw()
+)
+dev.off()
+
